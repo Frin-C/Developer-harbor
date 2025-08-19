@@ -41,7 +41,7 @@ pip install -r requirements.txt
     - **奖励 $r$**： $r(s_t,a) = DR(Q_t) - DR(Q_{t+1})$（即时动态范围缩减量）  
     - **策略 $\pi^*$**： 
     
-    $$V^{\pi}(s_t) = \max_{a} \left[ r(s_t, a) + V^{\pi}(F(s_t, a)) \right]$$
+      $$V^{\pi}(s_t) = \max_{a} \left[ r(s_t, a) + V^{\pi}(F(s_t, a)) \right]$$
 
   #### **2. 分支定界策略**
   - **分支**：
