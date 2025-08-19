@@ -29,9 +29,7 @@ pip install -r requirements.txt
   #### **1. 问题建模（MDP框架）**
   - **目标**：降低 QUBO 矩阵 $Q$ 的动态范围 $DR(Q)$，同时保持原始最优解不变：
 
-    $$
-    DR(Q) = \log_2 \left( \frac{\widehat{D}(U(Q))}{\check{D}(U(Q))} \right)
-    $$
+    $$DR(Q) = \log_2 \left( \frac{\widehat{D}(U(Q))}{\check{D}(U(Q))} \right)$$
 
     - $\widehat{D}$：矩阵元素最大绝对差值  
     - $\check{D}$：最小绝对差值  
@@ -39,13 +37,11 @@ pip install -r requirements.txt
   - **MDP 五要素**：
     - **状态 $S$**：当前 QUBO 矩阵 $Q_t$  
     - **动作 $A$**：选择元素 $(k,l)$ 及调整量 $w \in [y^-(Q), y^+(Q)]$  
-    - **转移函数 $f$**：$Q_{t+1} = Q_t + w \cdot e_k e_l^T$  
-    - **奖励 $r$**：$DR(Q_t) - DR(Q_{t+1})$（即时动态范围缩减量）  
+    - **转移函数 $f$**： $Q_{t+1} = Q_t + w \cdot e_k e_l^T$  
+    - **奖励 $r$**： $r(s_t,a) = DR(Q_t) - DR(Q_{t+1})$（即时动态范围缩减量）  
     - **策略 $\pi^*$**：
 
-      $$
-      V^{\pi^*}(s_t) = \max_a \left[ r(s_t,a) + V^{\pi^*}(f(s_t,a)) \right]
-      $$
+      $$V^{\pi^*}(s_t) = \max_a \left[ r(s_t,a) + V^{\pi^*}(f(s_t,a)) \right]$$
 
   #### **2. 分支定界策略**
   - **分支**：
@@ -56,17 +52,15 @@ pip install -r requirements.txt
     - 若 $0 \in [y^-, y^+]$，设 $w = -Q_{kl}$（节省硬件资源）  
     - 否则取区间边界值  
 
-- **定界剪枝**：
-  - 计算 $DR$ 下界：
+  - **定界剪枝**：
+    - 计算 $DR$ 下界：
 
-    $$
-    \check{r}(Q,T) = \log_2 \left( \frac{\check{b}(Q,T)}{\widehat{b}(Q,T)} \right)
-    $$
+      $$\check{r}(Q,T) = \log_2 \left( \frac{\check{b}(Q,T)}{\widehat{b}(Q,T)} \right)$$
 
-    - $\check{b}(Q,T)$：$T$ 步后最大差值的最小可能值  
-    - $\widehat{b}(Q,T)$：合并最小相邻差值迭代 $T$ 次后的结果  
+      - $\check{b}(Q,T)$：$T$ 步后最大差值的最小可能值  
+      - $\widehat{b}(Q,T)$：合并最小相邻差值迭代 $T$ 次后的结果  
 
-  - 若 $\check{r}(Q,T) \geq$ 当前最优 $DR$，剪枝  
+    - 若 $\check{r}(Q,T) \geq$ 当前最优 $DR$，剪枝  
 
 - 实现细节  
   1. **初始化**：输入原始 QUBO 矩阵 $Q$，设置最大迭代次数 $T_{\text{max}}$  
