@@ -39,9 +39,7 @@ pip install -r requirements.txt
     - **动作 $A$**：选择元素 $(k,l)$ 及调整量 $w \in [y^-(Q), y^+(Q)]$  
     - **转移函数 $f$**： $Q_{t+1} = Q_t + w \cdot e_k e_l^T$  
     - **奖励 $r$**： $r(s_t,a) = DR(Q_t) - DR(Q_{t+1})$（即时动态范围缩减量）  
-    - **策略 $\pi^*$**：
-
-      $$V^{\pi^*}(s_t) = \max_a \left[ r(s_t,a) + V^{\pi^*}(f(s_t,a)) \right]$$
+    - **策略 $\pi^*$**： $$V^{\pi^*}(s_t) = \max_a \left[ r(s_t,a) + V^{\pi^*}(f(s_t,a)) \right]$$
 
   #### **2. 分支定界策略**
   - **分支**：
