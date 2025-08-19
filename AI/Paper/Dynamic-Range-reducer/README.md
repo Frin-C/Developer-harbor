@@ -57,7 +57,7 @@ pip install -r requirements.txt
 
       $$\check{r}(Q,T) = \log_2 \left( \frac{\check{b}(Q,T)}{\widehat{b}(Q,T)} \right)$$
 
-      - $\check{b}(Q,T)$：$T$ 步后最大差值的最小可能值  
+      - $\check{b}(Q,T)$： $T$ 步后最大差值的最小可能值  
       - $\widehat{b}(Q,T)$：合并最小相邻差值迭代 $T$ 次后的结果  
 
     - 若 $\check{r}(Q,T) \geq$ 当前最优 $DR$，剪枝  
