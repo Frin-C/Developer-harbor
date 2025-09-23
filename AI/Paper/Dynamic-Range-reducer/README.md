@@ -21,6 +21,25 @@ pip install -r requirements.txt
 
 2. 运行示例：
 
+输入事例 QUBO 矩阵如下：
+
+$$
+Q = \begin{bmatrix}
+0.8 & -1.5 \\
+0 & -1000
+\end{bmatrix}
+$$
+
+运行后输出结果：
+
+$$
+Q' = \begin{bmatrix}
+0.8 & -0.8 \\
+0 & 0
+\end{bmatrix}
+$$
+
+
 ## 算法说明
 
 基于马尔可夫决策过程应用分支定界策略的动态范围压缩算法：
@@ -79,6 +98,13 @@ pip install -r requirements.txt
   - **差值合并**：通过排序和差值合并快速更新 $\widehat{b}(Q,T)$  
 
 - 性能分析
+  - **剪枝比列**
+
+  ![Fraction_of_pruned_states](./assets/Fraction_of_pruned_states.png)
+
+  - **动态压缩范围**
+
+  ![Relative_DR_reduction](./assets/Relative_DR_reduction.png)
 
 ## 作者信息
 - 作者姓名：陈福林
