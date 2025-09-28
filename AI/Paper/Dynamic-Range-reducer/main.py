@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 from Dynamic_Range_Reducer import QUBODynamicRangeReducer
-from data_producer import binclus_qubo
+import data_producer as dp
 from gurobi import solve_qubo
 
 print("\033c", end="")
@@ -13,8 +13,8 @@ print("\033c", end="")
 qubo_n4 = []
 qubo_n8 = []
 for k in range(20):
-    qubo_n4.append(binclus_qubo(4, k))
-    qubo_n8.append(binclus_qubo(8, k))
+    qubo_n4.append(dp.subsum_qubo(4, k))
+    qubo_n8.append(dp.subsum_qubo(8, k))
 
 np.save('qubo_n4.npy', qubo_n4)
 np.save('qubo_n8.npy', qubo_n8)
@@ -22,13 +22,14 @@ np.save('qubo_n8.npy', qubo_n8)
 # 读取数据并计算
 qubo_n4 = np.load('qubo_n4.npy', allow_pickle=True)
 qubo_n8 = np.load('qubo_n8.npy', allow_pickle=True)
+
 # 记录修剪比例
 pruned_state_n4 = []
 pruned_state_n8 = []
-for k in range(20):
-    print(f"Iteration {k+1}/20")
-    for i in range(2, 6):
-        print(f"  Param {i}/5")
+for i in range(2, 6):
+    print(f"Param {i}/5")
+    for k in range(20):
+        print(f"  Iteration {k+1}/20")
         for j in range(2, 7):
             print(f"    Horizon {j}/6")
             reducer4 = QUBODynamicRangeReducer(qubo_n4[k], j, i, 'mixed', verbose=False)
@@ -105,14 +106,12 @@ sns.boxplot(
 )
 # 美化
 for ax in axes:
-    ax.set_ylim(0, 1.05)
+    ax.set_ylim(-0.05, 1.05)
     ax.set_xlabel("Horizon")
     ax.set_ylabel("Fraction of pruned states")
     ax.legend(title="", loc="upper left")
 plt.tight_layout()
 plt.savefig('assets/Fraction_of_pruned_states.png', dpi=300, bbox_inches='tight')
-plt.show()
-
 
 # DR reduction plot
 strategies = ["base", 2, 4, "selection"]
@@ -121,14 +120,15 @@ DR_all_n4 = []
 DR_all_n8 = []
 DR_impact_n4 = []
 DR_impact_n8 = []
-for k in range(20):
-    print(f"Iteration {k+1}/20")
-    for i in ["base", 2, 4, "selection"]:
-        print(f"  Strategy {i}")
+for i in ["base", 2, 4, "selection"]:
+    print(f"Strategy {i}")
+    for k in range(20):
+        print(f"  Iteration {k+1}/20")
         for j in [0, 2, 3, 4, 5, 6]:
             print(f"    Horizon {j}/6")
             # 记录 DR_reduction
             if i == "base":
+                '''
                 reducer4_all = QUBODynamicRangeReducer(qubo_n4[k], j, 0, 'base', 'ALL', verbose=False)
                 reduced_Q, final_DR = reducer4_all.reduce_dynamic_range()
                 initial_DR = reducer4_all.original_DR
@@ -138,7 +138,7 @@ for k in range(20):
                 reduced_Q, final_DR = reducer8_all.reduce_dynamic_range()
                 initial_DR = reducer8_all.original_DR
                 DR_all_n8.append((initial_DR - final_DR) / initial_DR)
-
+                '''
                 reducer4_impact = QUBODynamicRangeReducer(qubo_n4[k], j, 0, 'base', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer4_impact.reduce_dynamic_range()
                 initial_DR = reducer4_impact.original_DR
@@ -149,6 +149,7 @@ for k in range(20):
                 initial_DR = reducer8_impact.original_DR
                 DR_impact_n8.append((initial_DR - final_DR) / initial_DR)
             elif i == "selection":
+                '''
                 reducer4_all = QUBODynamicRangeReducer(qubo_n4[k], j, 2, 'selection', 'ALL', verbose=False)
                 reduced_Q, final_DR = reducer4_all.reduce_dynamic_range()
                 initial_DR = reducer4_all.original_DR
@@ -158,7 +159,7 @@ for k in range(20):
                 reduced_Q, final_DR = reducer8_all.reduce_dynamic_range()
                 initial_DR = reducer8_all.original_DR
                 DR_all_n8.append((initial_DR - final_DR) / initial_DR)
-
+                '''
                 reducer4_impact = QUBODynamicRangeReducer(qubo_n4[k], j, 2, 'selection', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer4_impact.reduce_dynamic_range()
                 initial_DR = reducer4_impact.original_DR
@@ -170,6 +171,7 @@ for k in range(20):
                 DR_impact_n8.append((initial_DR - final_DR) / initial_DR)
 
             else:
+                '''
                 reducer4_all = QUBODynamicRangeReducer(qubo_n4[k], j, i, 'mixed', 'ALL', verbose=False)
                 reduced_Q, final_DR = reducer4_all.reduce_dynamic_range()
                 initial_DR = reducer4_all.original_DR
@@ -179,7 +181,7 @@ for k in range(20):
                 reduced_Q, final_DR = reducer8_all.reduce_dynamic_range()
                 initial_DR = reducer8_all.original_DR
                 DR_all_n8.append((initial_DR - final_DR) / initial_DR)
-
+                '''
                 reducer4_impact = QUBODynamicRangeReducer(qubo_n4[k], j, i, 'mixed', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer4_impact.reduce_dynamic_range()
                 initial_DR = reducer4_impact.original_DR
@@ -199,6 +201,7 @@ strategies = np.repeat(["$\\dot{\\pi}$ (baseline)",
 # 设置颜色
 colors = ["#a8c686", "#63b0a0", "#527ba4", "#2f2e63","#d7bcad", "#c58ca3", "#8c658c", "#3f2b56"]
 # 构造成 DataFrame
+'''
 df_all_n4 = pd.DataFrame({
     "Horizon": horizons,
     "Relative DR reduction": DR_all_n4,
@@ -209,6 +212,7 @@ df_all_n8 = pd.DataFrame({
     "Relative DR reduction": DR_all_n8,
     "Strategy": strategies
 })
+'''
 df_impact_n4 = pd.DataFrame({
     "Horizon": horizons,
     "Relative DR reduction": DR_impact_n4,
@@ -220,17 +224,17 @@ df_impact_n8 = pd.DataFrame({
     "Strategy": strategies
 })
 # 画图
-fig, axes = plt.subplots(2, 2, figsize=(14, 4), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(14, 4), sharey=True)
 # 子图数据划分
 subsets = [
-    df_all_n4[df_all_n4["Strategy"].isin(["$\\dot{\\pi}$ (baseline)", "$\\bar{\\pi}_2$", "$\\bar{\\pi}_4$", "$\\tilde{\\pi}$"])],
-    df_all_n8[df_all_n8["Strategy"].isin(["$\\dot{\\pi}$ (baseline)", "$\\bar{\\pi}_2$", "$\\bar{\\pi}_4$", "$\\tilde{\\pi}$"])],
+    # df_all_n4[df_all_n4["Strategy"].isin(["$\\dot{\\pi}$ (baseline)", "$\\bar{\\pi}_2$", "$\\bar{\\pi}_4$", "$\\tilde{\\pi}$"])],
+    # df_all_n8[df_all_n8["Strategy"].isin(["$\\dot{\\pi}$ (baseline)", "$\\bar{\\pi}_2$", "$\\bar{\\pi}_4$", "$\\tilde{\\pi}$"])],
     df_impact_n4[df_impact_n4["Strategy"].isin(["$\\dot{\\pi}$ (baseline)", "$\\bar{\\pi}_2$", "$\\bar{\\pi}_4$", "$\\tilde{\\pi}$"])],
     df_impact_n8[df_impact_n8["Strategy"].isin(["$\\dot{\\pi}$ (baseline)", "$\\bar{\\pi}_2$", "$\\bar{\\pi}_4$", "$\\tilde{\\pi}$"])]
 ]
 for ax, subset in zip(axes.flatten(), subsets):
     # 根据子图索引选择不同的配色
-    color_idx = 0 if ax in axes[0] else 4
+    color_idx = 0 if ax == axes[0] else 4
     sns.boxplot(
         data=subset,
         x="Horizon",
@@ -243,7 +247,7 @@ for ax, subset in zip(axes.flatten(), subsets):
     )
     ax.set_xlabel("Horizon")
     ax.set_ylabel("Relative DR reduction")
-    ax.set_ylim(0, 0.55)
+    ax.set_ylim(-0.05, 1.05)
     ax.legend(title="", loc="upper left")
 plt.tight_layout()
 plt.savefig('assets/Relative_DR_reduction.png', dpi=300, bbox_inches='tight')
