@@ -111,7 +111,7 @@ for ax in axes:
     ax.set_ylabel("Fraction of pruned states")
     ax.legend(title="", loc="upper left")
 plt.tight_layout()
-plt.savefig('Fraction_of_pruned_states.png', dpi=300, bbox_inches='tight')
+plt.savefig('./assets/Fraction_of_pruned_states.png', dpi=300, bbox_inches='tight')
 
 # DR reduction plot
 strategies = ["base", 2, 4, "selection"]
@@ -250,6 +250,6 @@ for ax, subset in zip(axes.flatten(), subsets):
     ax.set_ylim(-0.05, 1.05)
     ax.legend(title="", loc="upper left")
 plt.tight_layout()
-plt.savefig('Relative_DR_reduction.png', dpi=300, bbox_inches='tight')
+plt.savefig('./assets/Relative_DR_reduction.png', dpi=300, bbox_inches='tight')
 plt.show()
 
