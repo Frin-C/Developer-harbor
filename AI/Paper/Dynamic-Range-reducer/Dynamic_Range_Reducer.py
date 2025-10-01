@@ -118,7 +118,6 @@ class QUBODynamicRangeReducer:
         Returns:
             Q_new(np.ndarray): 简化后的QUBO矩阵
             const(float): 固定变量引入的常数项
-            free_vars(List[int]): 未固定变量的索引列表
         """
         const = 0.0
         free_vars = [i for i in range(self.n) if i not in fixed_vars]
@@ -140,13 +139,12 @@ class QUBODynamicRangeReducer:
         Q_new = Q_work[np.ix_(free_vars, free_vars)]
         return Q_new, const
 
-    def lb_roof_dual(self, Q: np.ndarray, fixed_vars: dict = None, exact_limit: int = 4) -> float:
+    def lb_roof_duality(self, Q: np.ndarray, fixed_vars: dict = None) -> float:
         """
         使用Roof Dual下界计算QUBO矩阵.
         Args:
             Q (np.ndarray): 输入QUBO矩阵
             fixed_vars (dict): 已固定变量的字典，键为变量索引，值为固定值
-            exact_limit (int): 精确计算阈值，默认4
             
         Returns:
             lower_energy(float): 计算得到的Roof Dual下界
@@ -154,149 +152,74 @@ class QUBODynamicRangeReducer:
         if fixed_vars is None:
             fixed_vars = {}
 
-        Q_clamped, const = self.clamp_qubo(Q, fixed_vars)
+        Q_clamped, const_clamped = self.clamp_qubo(Q, fixed_vars)
         m = Q_clamped.shape[0]
 
         if m == 0:
-            return float(const)
+            return float(const_clamped)
 
-        if m <= exact_limit:
-            best = None
-            for mask in range(1 << m):
-                x = np.array([(mask >> i) & 1 for i in range(m)], dtype=float)
-                val = x @ Q_clamped @ x
-                if best is None or val < best:
-                    best = val
-            return float(const + best)
+        try:
+            from igraph import Graph
+        except ImportError as e:
+            raise ImportError(
+                "igraph needs to be installed prior to running qubolite.lb_roof_dual(). You can "
+                "install igraph with:\n'pip install igraph'"
+            ) from e
 
-        # 对称化 Q（确保 Q 为对称矩阵）
-        Qs = (Q_clamped + Q_clamped.T) / 2.0
+        def to_posiform(Q_clamped: np.ndarray) -> tuple[np.ndarray, float]:
+            posiform = np.zeros((2, m, m))
+            # posiform[0] 包含 xi* xj 项，以及对角线上的 xi 项
+            # posiform[1] 包含 xi*!xj 项，以及对角线上的 !xi 项
+            lin = np.diag(Q_clamped)
+            qua = np.triu(Q_clamped, 1)
+            diag_ix = np.diag_indices_from(Q_clamped)
+            qua_neg = np.minimum(qua, 0)
+            posiform[0] = np.maximum(qua, 0)
+            posiform[1] = -qua_neg
+            posiform[0][diag_ix] = lin + qua_neg.sum(1)
+            lin_ = posiform[0][diag_ix].copy()  # =: c'
+            lin_neg = np.minimum(lin_, 0)
+            posiform[1][diag_ix] = -lin_neg
+            posiform[0][diag_ix] = np.maximum(lin_, 0)
+            const = lin_neg.sum()
+            return posiform, const
 
-        # 翻转工具：对给定 flip_mask (bool array)，计算变换后的 Q 和常数增量
-        def apply_flips(Qmat: np.ndarray, flip_mask: np.ndarray):
-            # Qmat assumed symmetric
-            mloc = Qmat.shape[0]
-            M = np.diag(np.where(flip_mask, -1.0, 1.0))   # M_ii = 1 or -1
-            c = flip_mask.astype(float)                   # c_i = 1 if flipped else 0
-            # Q' = M Q M
-            Qp = M @ Qmat @ M
-            # 线性项来自 2 * M^T Q c  （M 对角可简化）
-            L = 2.0 * (M @ (Qmat @ c))
-            # 将线性项并入对角
-            Qp = Qp.copy()
-            for i in range(mloc):
-                Qp[i, i] += L[i]
-            # 常数项 c^T Q c
-            const_add = float(c @ (Qmat @ c))
-            return Qp, const_add
+        def to_flow_graph(P):
+            n = P.shape[1]
+            G = Graph(directed=True)
+            vertices = np.arange(n + 1)
+            negated_vertices = np.arange(n + 1, 2 * n + 2)
+            # 流图的所有顶点
+            all_vertices = np.concatenate([vertices, negated_vertices])
+            G.add_vertices(all_vertices)
+            # 包含节点 x0 的顶点数组
+            n0 = np.kron(vertices[1:][:, np.newaxis], np.ones(n, dtype=int))
+            np.fill_diagonal(n0, np.zeros(n))
+            nn0 = np.kron(negated_vertices[1:][:, np.newaxis], np.ones(n, dtype=int))
+            np.fill_diagonal(nn0, (n + 1) * np.ones(n))
+            # 不包含节点 x0 的顶点数组
+            n1 = np.kron(np.ones(n, dtype=int)[:, np.newaxis], vertices[1:])
+            nn1 = np.kron(np.ones(n, dtype=int)[:, np.newaxis], negated_vertices[1:])
 
-        # 目标：最小化正的 off-diagonal 权重之和（越小越好）
-        def positive_offdiag_sum(Qmat: np.ndarray):
-            s = 0.0
-            for i in range(Qmat.shape[0]):
-                for j in range(i + 1, Qmat.shape[0]):
-                    w = Qmat[i, j]
-                    if w > 0:
-                        s += w
-            return s
+            n0_nn1 = np.stack((n0, nn1), axis=-1) # 从 ni 到 !nj 的边
+            n1_nn0 = np.stack((n1, nn0), axis=-1) # 从 nj 到 !ni 的边
+            n0_n1 = np.stack((n0, n1), axis=-1) # 从 ni 到 nj 的边
+            nn1_nn0 = np.stack((nn1, nn0), axis=-1) # 从 !nj 到 !ni 的边
+            pos_indices = np.invert(np.isclose(P[0], 0))
+            neg_indices = np.invert(np.isclose(P[1], 0))
+            # 将容量设置为正形参数的一半
+            capacities = 0.5 * np.concatenate([P[0][pos_indices], P[0][pos_indices],
+                                            P[1][neg_indices], P[1][neg_indices]])
+            edges = np.concatenate([n0_nn1[pos_indices], n1_nn0[pos_indices],
+                                    n0_n1[neg_indices], nn1_nn0[neg_indices]])
+            G.add_edges(edges)
+            return G, capacities
 
-        # 贪心翻转：每步尝试翻转单个变量，若能减少正权重总和则保留，直到无改进
-        flip_mask = np.zeros(m, dtype=bool)
-        Qcurrent = Qs.copy()
-        const_extra = 0.0
-        improved = True
-        while improved:
-            improved = False
-            best_reduction = 0.0
-            best_i = -1
-            best_Q = None
-            best_const_add = 0.0
-            base_score = positive_offdiag_sum(Qcurrent)
-            for i in range(m):
-                fm = flip_mask.copy()
-                fm[i] = ~fm[i]
-                Qp, cadd = apply_flips(Qs, fm)  # compute full transformed Qwrt original symmetrical Qs
-                score = positive_offdiag_sum(Qp)
-                reduction = base_score - score
-                if reduction > best_reduction + 1e-12:
-                    best_reduction = reduction
-                    best_i = i
-                    best_Q = Qp
-                    best_const_add = cadd
-            if best_i >= 0:
-                # 接受该翻转
-                flip_mask[best_i] = ~flip_mask[best_i]
-                Qcurrent = best_Q
-                const_extra = float(best_const_add)  # note: apply_flips computes c^T Q c for full flip_mask; we overwrite
-                improved = True
-
-        # apply_flips returned Qp that already absorbs linear terms into diagonals, and const_extra is c^T Q c
-        # 需要注意：const_extra 是基于 Qs 的常数增量，Qs 对应的是 Q_clamped（已包含原 const），
-        # 所以整体常数应累加
-        const_total = const + const_extra
-
-        # 现在 Qcurrent 为翻转后矩阵（已并入线性项到对角）
-        # 再构造流网络：把负的二次项（w_ij < 0）转为边容量，正项尽量已被翻转为负
-        G = nx.DiGraph()
-        source = 's'
-        sink = 't'
-        G.add_node(source)
-        G.add_node(sink)
-        for i in range(m):
-            G.add_node(i)
-
-        # 对角项处理：正对角作为 source->i，负对角作为 i->sink
-        for i in range(m):
-            a_i = float(Qcurrent[i, i])
-            if a_i > 0:
-                G.add_edge(source, i, capacity=a_i)
-            elif a_i < 0:
-                G.add_edge(i, sink, capacity=-a_i)
-
-        # 二次项处理：负交互（w < 0）转为节点间容量（双向）
-        for i in range(m):
-            for j in range(i + 1, m):
-                w = float(Qcurrent[i, j])
-                if w < 0:
-                    cap = -w
-                    if G.has_edge(i, j):
-                        G[i][j]['capacity'] += cap
-                    else:
-                        G.add_edge(i, j, capacity=cap)
-                    if G.has_edge(j, i):
-                        G[j][i]['capacity'] += cap
-                    else:
-                        G.add_edge(j, i, capacity=cap)
-                else:
-                    # 如果仍为正（未被翻转消除），可以做简单的上界分解以保守地把一部分移到对角
-                    # 这里把正项 w 分解为：增加对角 w/2 到每个节点（等价于添加 linear bias），
-                    # 并在常数上不改变（这是近似，不改变可行性，但会得到较弱的补充）
-                    # 这样可以降低图中未处理的正权重对下界的影响
-                    half = w / 2.0
-                    # 把一半加入对角（相当于把 w x_i x_j ~ half*x_i + half*x_j - half*|x_i-x_j| 的一部分）
-                    # 这是近似处理，目的是避免忽略该正权重所带来的松弛过大
-                    if G.has_edge(source, i):
-                        G[source][i]['capacity'] += half
-                    else:
-                        G.add_edge(source, i, capacity=half)
-                    if G.has_edge(source, j):
-                        G[source][j]['capacity'] += half
-                    else:
-                        G.add_edge(source, j, capacity=half)
-                    # 同时把一半也作为从节点到汇的可能量（对称处理，以稳健性为主）
-                    if G.has_edge(i, sink):
-                        G[i][sink]['capacity'] += half
-                    else:
-                        G.add_edge(i, sink, capacity=half)
-                    if G.has_edge(j, sink):
-                        G[j][sink]['capacity'] += half
-                    else:
-                        G.add_edge(j, sink, capacity=half)
-                    # 该近似并不会完美恢复原二次项，但通常能获得比完全忽略更紧的下界
-
-        cut_value, (S, T) = nx.minimum_cut(G, source, sink, capacity='capacity')
-        
-        return float(const + cut_value)
+        P, const = to_posiform(Q_clamped)
+        G, capacities = to_flow_graph(P)
+        mf = G.maxflow(0, m + 1, capacity=list(capacities))
+        v = mf.value
+        return const + v + const_clamped
 
     def lb_negative(self, Q: np.ndarray, fixed_vars: dict = None) -> float:
         """
@@ -424,7 +347,7 @@ class QUBODynamicRangeReducer:
                 fixed_vars[l] = b
 
             y_hat[(a, b)] = self.ub_local_search(Q, fixed_vars)
-            y_bar[(a, b)] = self.lb_negative(Q, fixed_vars)
+            y_bar[(a, b)] = self.lb_roof_duality(Q, fixed_vars)
 
         # 计算w的边界
         if is_diagonal:
@@ -488,7 +411,6 @@ class QUBODynamicRangeReducer:
         best_DR = float('inf')
         best_action = None
         best_next = None
-        
         if self.n > 5:
             # get possible actions based on IMPACT strategy
             values = []
