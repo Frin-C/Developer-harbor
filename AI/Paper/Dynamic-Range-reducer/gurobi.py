@@ -81,24 +81,4 @@ def solve_qubo(Q, time_limit=None, verbose=False):
         return {"status": f"GUROBI_ERROR: {str(e)}"}
     except Exception as e:
         return {"status": f"GENERAL_ERROR: {str(e)}"}
-
-# 示例用法
-if __name__ == "__main__":
-    # 示例QUBO矩阵 (上三角格式)
-    # 目标函数: min -3x0 + 2x1 + 4x2 + 2x0x1 - 1.5x0x2 + 3x1x2
-    Q_example = np.array([
-        [-2.512, -3.369, 2.836, 3.085, 1.256],
-        [0, 1.041, 3.857, 2.591, -3.189],
-        [0, 0, -3.498, -0.643, -1.147],
-        [0, 0, 0, 0.757, -3.539],
-        [0, 0, 0, 0, 1.866]
-    ])
     
-    # 求解QUBO问题
-    result = solve_qubo(Q_example, time_limit=30, verbose=True)
-    
-    # 输出结果
-    print("\n求解状态:", result.get("status"))
-    if "obj_value" in result:
-        print("目标值:", result["obj_value"])
-        print("最优解:", result["solution"])
