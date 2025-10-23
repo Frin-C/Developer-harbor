@@ -1,13 +1,13 @@
 import numpy as np
 import math
 import itertools
-import networkx as nx
 from typing import Tuple, List
-from collections import deque
+from collections import deque, Counter
+import bisect
 
 class QUBODynamicRangeReducer:
     def __init__(self, Q: np.ndarray, T: int = 5, roll_depth: int = 2, 
-                 policy_select: str = 'selection', branch_strategy: str = 'IMPACT', verbose: bool = False):
+                 policy_select: str = 'selection', branch_strategy: str = 'IMPACT', lb_method: str = 'roof_duality', verbose: bool = False):
         """
         初始化QUBO动态范围缩减器
         
@@ -17,6 +17,7 @@ class QUBODynamicRangeReducer:
             roll_depth (int): 策略推演深度，默认2
             policy_select (str): 策略选择('selection','mixed'或'base')，默认'selection'
             branch_strategy (str): 分支策略('ALL'或'IMPACT')，默认'IMPACT'
+            lb_method (str): 下界计算方法('roof_duality'或'negative')，默认'roof_duality'
             verbose (bool): 是否打印详细过程，默认False
 
         """
@@ -26,10 +27,22 @@ class QUBODynamicRangeReducer:
         self.roll_depth = 0 if policy_select == 'base' else roll_depth if roll_depth < T else T
         self.policy_select = policy_select
         self.branch_strategy = branch_strategy
+        self.lb_method = lb_method
         self.verbose = verbose
 
-        self.original_DR = self.dynamic_range(Q)
-        
+        # current_Q 用于保存可被增量更新的当前矩阵副本
+        self.current_Q = self.original_Q.copy()
+        # 初始化增量统计结构以避免每次遍历完整矩阵计算 dynamic range
+        self.value_counts = Counter()
+        for i in range(self.n):
+            for j in range(i, self.n):
+                self.value_counts[float(Q[i, j])] += 1
+        # 有序唯一值列表
+        self.sorted_unique = sorted(self.value_counts.keys())
+        # 缓存最小非零差值与最大差
+        self._recompute_range_stats()
+        self.original_DR = self.get_dynamic_range_from_stats()
+
         # 状态空间
         self.best_DR = float('inf')
         self.best_state = None
@@ -47,25 +60,122 @@ class QUBODynamicRangeReducer:
             float: 计算得到的动态范围值
 
         """
-        # 提取上三角元素
+        # 如果请求对当前维护的矩阵计算动态范围，使用增量统计以避免遍历
+        if Q is self.current_Q:
+            return self.get_dynamic_range_from_stats()
+
+        # 否则回退到全矩阵计算（保持向后兼容）
         values = []
         for i in range(self.n):
             for j in range(i, self.n):
                 values.append(Q[i, j])
-        
-        # 计算所有非零差值
+
         unique_vals = sorted(set(values))
         if len(unique_vals) < 2:
             return 0.0
-        
+
         min_diff = float('inf')
         for i in range(1, len(unique_vals)):
             diff = unique_vals[i] - unique_vals[i-1]
             if diff > 0:
                 min_diff = min(min_diff, diff)
-        
+
         max_diff = unique_vals[-1] - unique_vals[0]
         return math.log2(max_diff / min_diff) if min_diff > 0 else float('inf')
+    
+    def _replace_value(self, old_val: float, new_val: float) -> None:
+        """
+        将值计数器中的旧值替换为新值，并更新有序唯一值列表
+        
+        Args:
+            old_val (float): 要替换的旧值
+            new_val (float): 要替换成的新值
+        
+        Returns:
+            None
+
+        """
+        old_val = float(old_val)
+        new_val = float(new_val)
+        
+        # 如果新旧值相同，无需操作
+        if old_val == new_val:
+            return
+            
+        # 处理旧值
+        if self.value_counts[old_val] <= 1:
+            # 删除键
+            del self.value_counts[old_val]
+            idx = bisect.bisect_left(self.sorted_unique, old_val)
+            if idx < len(self.sorted_unique) and self.sorted_unique[idx] == old_val:
+                self.sorted_unique.pop(idx)
+        else:
+            self.value_counts[old_val] -= 1
+            
+        # 处理新值
+        self.value_counts[new_val] += 1
+        if self.value_counts[new_val] == 1:
+            bisect.insort(self.sorted_unique, new_val)
+            
+        self._recompute_range_stats()
+
+    def _recompute_range_stats(self) -> None:
+        """
+        重新计算最大差与最小正差
+        
+        Returns:
+            None
+
+        """
+        # 计算 max_diff 和 min_positive_diff
+        if len(self.sorted_unique) < 2:
+            self._max_diff = 0.0
+            self._min_pos_diff = float('inf')
+            return
+        self._max_diff = self.sorted_unique[-1] - self.sorted_unique[0]
+        # 找最小正差
+        min_diff = float('inf')
+        prev = self.sorted_unique[0]
+        for v in self.sorted_unique[1:]:
+            diff = v - prev
+            if diff > 0 and diff < min_diff:
+                min_diff = diff
+            prev = v
+        self._min_pos_diff = min_diff if min_diff < float('inf') else float('inf')
+
+    def get_dynamic_range_from_stats(self) -> float:
+        """
+        从值计数器计算动态范围
+        
+        Returns:
+            float: 计算得到的动态范围值
+
+        """
+        if self._min_pos_diff == float('inf') or self._min_pos_diff <= 0:
+            return float('inf') if self._max_diff > 0 else 0.0
+        return math.log2(self._max_diff / self._min_pos_diff)
+
+    def _update_value_at(self, i: int, j: int, new_val: float) -> None:
+        """
+        在维护的 current_Q 上将 (i,j) 的值从旧值替换为 new_val，并更新统计结构。
+        
+        Args:
+            i (int): 要更新的QUBO矩阵行索引
+            j (int): 要更新的QUBO矩阵列索引
+            new_val (float): 新值
+        
+        Returns:
+            None
+
+        """
+        old = float(self.current_Q[i, j])
+        new = float(new_val)
+        if old == new:
+            return
+        # 上三角约定：只维护 i<=j 部分
+        a, b = (i, j) if i <= j else (j, i)
+        self._replace_value(old, new)
+        self.current_Q[a, b] = new
 
     def get_possible_actions(self, Q: np.ndarray) -> List[Tuple[int, int]]:
         """
@@ -116,8 +226,9 @@ class QUBODynamicRangeReducer:
             fixed_vars (dict): 已固定变量的字典，键为变量索引，值为固定值
 
         Returns:
-            Q_new(np.ndarray): 简化后的QUBO矩阵
-            const(float): 固定变量引入的常数项
+            Tuple (np.ndarray, float):
+                - Q_new: 简化后的QUBO矩阵
+                - const: 固定变量引入的常数项
         """
         const = 0.0
         free_vars = [i for i in range(self.n) if i not in fixed_vars]
@@ -323,8 +434,9 @@ class QUBODynamicRangeReducer:
             l (int): 变量索引l
             
         Returns:
-            w_min(float): 计算得到的权重w的最小值
-            w_max(float): 计算得到的权重w的最大值
+            Tuple(float, float):
+                - w_min: 计算得到的权重w的最小值
+                - w_max: 计算得到的权重w的最大值
 
         """
         # 区分对角线元素和非对角线元素
@@ -347,7 +459,7 @@ class QUBODynamicRangeReducer:
                 fixed_vars[l] = b
 
             y_hat[(a, b)] = self.ub_local_search(Q, fixed_vars)
-            y_bar[(a, b)] = self.lb_roof_duality(Q, fixed_vars)
+            y_bar[(a, b)] = self.lb_negative(Q, fixed_vars) if self.lb_method == 'negative' else self.lb_roof_duality(Q, fixed_vars)
 
         # 计算w的边界
         if is_diagonal:
@@ -387,6 +499,12 @@ class QUBODynamicRangeReducer:
         if w_min <= -current_val <= w_max:
             w = -current_val
             new_Q[i, j] = current_val + w
+            # 如果我们维护了 current_Q，并且 Q 就是 current_Q，则增量更新统计
+            if Q is self.current_Q:
+                self._update_value_at(i, j, new_Q[i, j])
+            else:
+                # 否则将 current_Q 同步为 new_Q（批量更新）
+                self._bulk_sync_current_Q(new_Q)
             return new_Q
 
         if current_val < 0:
@@ -395,7 +513,31 @@ class QUBODynamicRangeReducer:
             w = w_min
             
         new_Q[i, j] = current_val + w
+        if Q is self.current_Q:
+            self._update_value_at(i, j, new_Q[i, j])
+        else:
+            # 否则将 current_Q 同步为 new_Q（批量更新）
+            self._bulk_sync_current_Q(new_Q)
         return new_Q
+
+    def _bulk_sync_current_Q(self, new_Q: np.ndarray) -> None:
+        """
+        当全矩阵被替换时，将 current_Q 同步为 new_Q，并用增量更新统计（逐元素对比）
+        
+        Args:
+            new_Q (np.ndarray): 新的QUBO矩阵
+        
+        Returns:
+            None
+
+        """
+        for i in range(self.n):
+            for j in range(i, self.n):
+                old = float(self.current_Q[i, j])
+                new = float(new_Q[i, j])
+                if old != new:
+                    self._replace_value(old, new)
+                    self.current_Q[i, j] = new
 
     def policy(self, Q: np.ndarray) -> Tuple[Tuple[int, int], np.ndarray]:
         """
@@ -404,8 +546,9 @@ class QUBODynamicRangeReducer:
             Q (np.ndarray): 输入QUBO矩阵
             
         Returns:
-            best_action(Tuple[int, int]): 计算得到的最优动作
-            best_next(np.ndarray): 计算得到的最优下一个QUBO矩阵
+            Tuple (Tuple[int, int], np.ndarray):
+                - best_action: 计算得到的最优动作
+                - best_next: 计算得到的最优下一个QUBO矩阵
 
         """
         best_DR = float('inf')
@@ -475,8 +618,9 @@ class QUBODynamicRangeReducer:
             None
             
         Returns:
-            best_Q(np.ndarray): 分支定界得到的最优QUBO矩阵
-            best_DR(float): 分支定界得到的最优动态范围
+            Tuple (np.ndarray, float):
+                - best_Q: 分支定界得到的最优QUBO矩阵
+                - best_DR: 分支定界得到的最优动态范围
 
         """
         queue = deque()
@@ -545,12 +689,13 @@ class QUBODynamicRangeReducer:
             None
             
         Returns:
-            best_Q(np.ndarray): 动态范围缩减后的最优QUBO矩阵
-            best_DR(float): 动态范围缩减后的最优动态范围
+            Tuple (np.ndarray, float):
+                - best_Q: 动态范围缩减后的最优QUBO矩阵
+                - best_DR: 动态范围缩减后的最优动态范围
 
         """
         # 初始化
-        self.best_DR = self.dynamic_range(self.original_Q)
+        self.best_DR = self.original_DR
         self.best_state = self.original_Q.copy()
         
         # 执行分支定界程序
@@ -567,6 +712,6 @@ class QUBODynamicRangeReducer:
         if self.verbose:
             print(f"\nNodes explored: {self.nodes_explored}")
             print(f"Nodes pruned: {self.nodes_pruned}")
-            print(f"Original DR: {self.dynamic_range(self.original_Q):.4f}")
+            print(f"Original DR: {self.original_DR:.4f}")
             print(f"Reduced DR: {best_DR:.4f}")
         return best_Q, best_DR
