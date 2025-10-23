@@ -16,12 +16,12 @@ for k in range(20):
     qubo_n8.append(dp.subsum_qubo(8, k))
     qubo_n16.append(dp.subsum_qubo(16, k))
 
-np.save('qubo_n8.npy', qubo_n8)
-np.save('qubo_n16.npy', qubo_n16)
+np.save('./matrix/qubo_n8.npy', qubo_n8)
+np.save('./matrix/qubo_n16.npy', qubo_n16)
 """
 # 读取数据并计算
-qubo_n8 = np.load('qubo_n8.npy', allow_pickle=True)
-qubo_n16 = np.load('qubo_n16.npy', allow_pickle=True)
+qubo_n8 = np.load('./matrix/qubo_n8.npy', allow_pickle=True)
+qubo_n16 = np.load('./matrix/qubo_n16.npy', allow_pickle=True)
 
 # 记录修剪比例
 pruned_state_n4 = []
