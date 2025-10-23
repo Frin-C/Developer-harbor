@@ -81,4 +81,3 @@ def solve_qubo(Q, time_limit=None, verbose=False):
         return {"status": f"GUROBI_ERROR: {str(e)}"}
     except Exception as e:
         return {"status": f"GENERAL_ERROR: {str(e)}"}
-    
