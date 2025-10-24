@@ -660,12 +660,9 @@ class QUBODynamicRangeReducer:
                 reward = current_DR - next_DR
                 
                 # 计算bound
-                remaining_steps = self.T - step - 1
-                remaining_step = self.roll_depth - step - 1
-
                 bound = self.rollout(
                     next_Q,
-                    min(remaining_steps, self.T) if self.policy_select == 'selection' else max(remaining_step, 1)
+                    self.roll_depth
                 )
                 
                 # 剪枝
