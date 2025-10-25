@@ -9,7 +9,7 @@ from gurobi import solve_qubo
 
 print("\033c", end="")
 # 生成数据
-
+"""
 qubo_n4 = []
 qubo_n8 = []
 for k in range(20):
@@ -250,4 +250,3 @@ for ax, subset in zip(axes.flatten(), subsets):
 plt.tight_layout()
 plt.savefig('./assets/Relative_DR_reduction.png', dpi=300, bbox_inches='tight')
 plt.show()
-"""
