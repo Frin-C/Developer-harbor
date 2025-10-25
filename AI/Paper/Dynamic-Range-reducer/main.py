@@ -9,19 +9,19 @@ from gurobi import solve_qubo
 
 print("\033c", end="")
 # 生成数据
-"""
-qubo_n8 = []
-qubo_n16 = []
-for k in range(20):
-    qubo_n8.append(dp.subsum_qubo(8, k))
-    qubo_n16.append(dp.subsum_qubo(16, k))
 
+qubo_n4 = []
+qubo_n8 = []
+for k in range(20):
+    qubo_n4.append(dp.subsum_qubo(4, k))
+    qubo_n8.append(dp.subsum_qubo(8, k))
+
+np.save('./matrix/qubo_n4.npy', qubo_n4)
 np.save('./matrix/qubo_n8.npy', qubo_n8)
-np.save('./matrix/qubo_n16.npy', qubo_n16)
 """
 # 读取数据并计算
+qubo_n4 = np.load('./matrix/qubo_n4.npy', allow_pickle=True)
 qubo_n8 = np.load('./matrix/qubo_n8.npy', allow_pickle=True)
-qubo_n16 = np.load('./matrix/qubo_n16.npy', allow_pickle=True)
 
 # 记录修剪比例
 pruned_state_n4 = []
@@ -32,9 +32,9 @@ for i in range(2, 6):
         print(f"  Iteration {k+1}/20")
         for j in range(2, 7):
             print(f"    Horizon {j}/6")
-            reducer4 = QUBODynamicRangeReducer(qubo_n8[k], j, i, 'mixed', verbose=False)
+            reducer4 = QUBODynamicRangeReducer(qubo_n4[k], j, i, 'mixed', verbose=False)
             reduced_Q, final_DR = reducer4.reduce_dynamic_range()
-            result = solve_qubo(qubo_n8[k], time_limit=30, verbose=False)
+            result = solve_qubo(qubo_n4[k], time_limit=30, verbose=False)
             result_reduced = solve_qubo(reduced_Q, time_limit=30, verbose=False)
             # 检查解是否一致
             if result['solution'] != result_reduced['solution']:
@@ -46,9 +46,9 @@ for i in range(2, 6):
 
             pruned_state_n4.append(reducer4.nodes_pruned / (reducer4.nodes_explored + reducer4.nodes_pruned))
 
-            reducer8 = QUBODynamicRangeReducer(qubo_n16[k], j, i, 'mixed')
+            reducer8 = QUBODynamicRangeReducer(qubo_n8[k], j, i, 'mixed')
             reduced_Q, final_DR = reducer8.reduce_dynamic_range()
-            result = solve_qubo(qubo_n16[k], time_limit=30, verbose=False)
+            result = solve_qubo(qubo_n8[k], time_limit=30, verbose=False)
             result_reduced = solve_qubo(reduced_Q, time_limit=30, verbose=False)
             # 检查解是否一致
             if result['solution'] != result_reduced['solution']:
@@ -138,12 +138,12 @@ for i in ["base", 2, 4, "selection"]:
                 initial_DR = reducer8_all.original_DR
                 DR_all_n8.append((initial_DR - final_DR) / initial_DR)
                 '''
-                reducer4_impact = QUBODynamicRangeReducer(qubo_n8[k], j, 0, 'base', 'IMPACT', verbose=False)
+                reducer4_impact = QUBODynamicRangeReducer(qubo_n4[k], j, 0, 'base', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer4_impact.reduce_dynamic_range()
                 initial_DR = reducer4_impact.original_DR
                 DR_impact_n4.append((initial_DR - final_DR) / initial_DR)
 
-                reducer8_impact = QUBODynamicRangeReducer(qubo_n16[k], j, 0, 'base', 'IMPACT', verbose=False)
+                reducer8_impact = QUBODynamicRangeReducer(qubo_n8[k], j, 0, 'base', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer8_impact.reduce_dynamic_range()
                 initial_DR = reducer8_impact.original_DR
                 DR_impact_n8.append((initial_DR - final_DR) / initial_DR)
@@ -159,12 +159,12 @@ for i in ["base", 2, 4, "selection"]:
                 initial_DR = reducer8_all.original_DR
                 DR_all_n8.append((initial_DR - final_DR) / initial_DR)
                 '''
-                reducer4_impact = QUBODynamicRangeReducer(qubo_n8[k], j, 2, 'selection', 'IMPACT', verbose=False)
+                reducer4_impact = QUBODynamicRangeReducer(qubo_n4[k], j, 2, 'selection', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer4_impact.reduce_dynamic_range()
                 initial_DR = reducer4_impact.original_DR
                 DR_impact_n4.append((initial_DR - final_DR) / initial_DR)
 
-                reducer8_impact = QUBODynamicRangeReducer(qubo_n16[k], j, 2, 'selection', 'IMPACT', verbose=False)
+                reducer8_impact = QUBODynamicRangeReducer(qubo_n8[k], j, 2, 'selection', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer8_impact.reduce_dynamic_range()
                 initial_DR = reducer8_impact.original_DR
                 DR_impact_n8.append((initial_DR - final_DR) / initial_DR)
@@ -181,12 +181,12 @@ for i in ["base", 2, 4, "selection"]:
                 initial_DR = reducer8_all.original_DR
                 DR_all_n8.append((initial_DR - final_DR) / initial_DR)
                 '''
-                reducer4_impact = QUBODynamicRangeReducer(qubo_n8[k], j, i, 'mixed', 'IMPACT', verbose=False)
+                reducer4_impact = QUBODynamicRangeReducer(qubo_n4[k], j, i, 'mixed', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer4_impact.reduce_dynamic_range()
                 initial_DR = reducer4_impact.original_DR
                 DR_impact_n4.append((initial_DR - final_DR) / initial_DR)
 
-                reducer8_impact = QUBODynamicRangeReducer(qubo_n16[k], j, i, 'mixed', 'IMPACT', verbose=False)
+                reducer8_impact = QUBODynamicRangeReducer(qubo_n8[k], j, i, 'mixed', 'IMPACT', verbose=False)
                 reduced_Q, final_DR = reducer8_impact.reduce_dynamic_range()
                 initial_DR = reducer8_impact.original_DR
                 DR_impact_n8.append((initial_DR - final_DR) / initial_DR)
@@ -250,3 +250,4 @@ for ax, subset in zip(axes.flatten(), subsets):
 plt.tight_layout()
 plt.savefig('./assets/Relative_DR_reduction.png', dpi=300, bbox_inches='tight')
 plt.show()
+"""
