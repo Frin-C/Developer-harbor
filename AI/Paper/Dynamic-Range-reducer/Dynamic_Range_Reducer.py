@@ -7,7 +7,7 @@ import bisect
 
 class QUBODynamicRangeReducer:
     def __init__(self, Q: np.ndarray, T: int = 5, roll_depth: int = 2, 
-                 policy_select: str = 'selection', branch_strategy: str = 'IMPACT', lb_method: str = 'roof_duality', verbose: bool = False):
+                 policy_select: str = 'selection', branch_strategy: str = 'IMPACT', verbose: bool = False):
         """
         初始化QUBO动态范围缩减器
         
@@ -17,7 +17,6 @@ class QUBODynamicRangeReducer:
             roll_depth (int): 策略推演深度，默认2
             policy_select (str): 策略选择('selection','mixed'或'base')，默认'selection'
             branch_strategy (str): 分支策略('ALL'或'IMPACT')，默认'IMPACT'
-            lb_method (str): 下界计算方法('roof_duality'或'negative')，默认'roof_duality'
             verbose (bool): 是否打印详细过程，默认False
 
         """
@@ -27,7 +26,6 @@ class QUBODynamicRangeReducer:
         self.roll_depth = 0 if policy_select == 'base' else roll_depth if roll_depth < T else T
         self.policy_select = policy_select
         self.branch_strategy = branch_strategy
-        self.lb_method = lb_method
         self.verbose = verbose
 
         # current_Q 用于保存可被增量更新的当前矩阵副本
@@ -226,9 +224,8 @@ class QUBODynamicRangeReducer:
             fixed_vars (dict): 已固定变量的字典，键为变量索引，值为固定值
 
         Returns:
-            Tuple (np.ndarray, float):
-                - Q_new: 简化后的QUBO矩阵
-                - const: 固定变量引入的常数项
+            Q_new(np.ndarray): 简化后的QUBO矩阵
+            const(float): 固定变量引入的常数项
         """
         const = 0.0
         free_vars = [i for i in range(self.n) if i not in fixed_vars]
@@ -434,9 +431,8 @@ class QUBODynamicRangeReducer:
             l (int): 变量索引l
             
         Returns:
-            Tuple(float, float):
-                - w_min: 计算得到的权重w的最小值
-                - w_max: 计算得到的权重w的最大值
+            w_min(float): 计算得到的权重w的最小值
+            w_max(float): 计算得到的权重w的最大值
 
         """
         # 区分对角线元素和非对角线元素
@@ -459,7 +455,7 @@ class QUBODynamicRangeReducer:
                 fixed_vars[l] = b
 
             y_hat[(a, b)] = self.ub_local_search(Q, fixed_vars)
-            y_bar[(a, b)] = self.lb_negative(Q, fixed_vars) if self.lb_method == 'negative' else self.lb_roof_duality(Q, fixed_vars)
+            y_bar[(a, b)] = self.lb_roof_duality(Q, fixed_vars)
 
         # 计算w的边界
         if is_diagonal:
@@ -546,9 +542,8 @@ class QUBODynamicRangeReducer:
             Q (np.ndarray): 输入QUBO矩阵
             
         Returns:
-            Tuple (Tuple[int, int], np.ndarray):
-                - best_action: 计算得到的最优动作
-                - best_next: 计算得到的最优下一个QUBO矩阵
+            best_action(Tuple[int, int]): 计算得到的最优动作
+            best_next(np.ndarray): 计算得到的最优下一个QUBO矩阵
 
         """
         best_DR = float('inf')
@@ -618,9 +613,8 @@ class QUBODynamicRangeReducer:
             None
             
         Returns:
-            Tuple (np.ndarray, float):
-                - best_Q: 分支定界得到的最优QUBO矩阵
-                - best_DR: 分支定界得到的最优动态范围
+            best_Q(np.ndarray): 分支定界得到的最优QUBO矩阵
+            best_DR(float): 分支定界得到的最优动态范围
 
         """
         queue = deque()
@@ -660,9 +654,12 @@ class QUBODynamicRangeReducer:
                 reward = current_DR - next_DR
                 
                 # 计算bound
+                remaining_steps = self.T - step - 1
+                remaining_step = self.roll_depth - step - 1
+
                 bound = self.rollout(
                     next_Q,
-                    self.roll_depth
+                    min(remaining_steps, self.roll_depth) if self.policy_select == 'selection' else max(remaining_step, 1)
                 )
                 
                 # 剪枝
@@ -686,9 +683,8 @@ class QUBODynamicRangeReducer:
             None
             
         Returns:
-            Tuple (np.ndarray, float):
-                - best_Q: 动态范围缩减后的最优QUBO矩阵
-                - best_DR: 动态范围缩减后的最优动态范围
+            best_Q(np.ndarray): 动态范围缩减后的最优QUBO矩阵
+            best_DR(float): 动态范围缩减后的最优动态范围
 
         """
         # 初始化
